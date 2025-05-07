@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	register.Plugin("example", New)
+	register.Plugin("terraformdescription", New)
 }
 
 type MySettings struct {
