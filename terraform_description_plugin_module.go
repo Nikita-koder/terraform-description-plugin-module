@@ -1,10 +1,9 @@
 package linters
 
 import (
+	"github.com/golangci/plugin-module-register/register"
 	"go/ast"
 	"go/token"
-
-	"github.com/golangci/plugin-module-register/register"
 	"golang.org/x/tools/go/analysis"
 )
 
@@ -55,46 +54,104 @@ func (f *PluginExample) GetLoadMode() string {
 func (f *PluginExample) run(pass *analysis.Pass) (interface{}, error) {
 	for _, file := range pass.Files {
 		ast.Inspect(file, func(n ast.Node) bool {
-			composite, ok := n.(*ast.CompositeLit)
+			cl, ok := n.(*ast.CompositeLit)
 			if !ok {
 				return true
 			}
 
-			// Проверка типа: *schema.Schema
-			selExpr, ok := composite.Type.(*ast.SelectorExpr)
-			if !ok || selExpr.Sel.Name != "Schema" {
-				return true
-			}
-
-			ident, ok := selExpr.X.(*ast.Ident)
-			if !ok || ident.Name != "schema" {
-				return true
-			}
-
-			for _, elt := range composite.Elts {
-				kv, ok := elt.(*ast.KeyValueExpr)
-				if !ok {
-					continue
-				}
-
-				keyIdent, ok := kv.Key.(*ast.Ident)
-				if !ok || keyIdent.Name != "Description" {
-					continue
-				}
-
-				val, ok := kv.Value.(*ast.BasicLit)
-				if !ok || val.Kind != token.STRING {
-					continue
-				}
-
-				if val.Value == `""` {
-					pass.Reportf(val.Pos(), "Description in schema.Schema is empty")
-				}
+			// Проверяем, что это schema.Schema
+			if isSchemaType(cl.Type, "Schema") {
+				checkDescriptionField(pass, cl)
+				checkAttributesMap(pass, cl)
 			}
 
 			return true
 		})
 	}
-
 	return nil, nil
+}
+
+func isSchemaType(expr ast.Expr, name string) bool {
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != name {
+		return false
+	}
+	ident, ok := sel.X.(*ast.Ident)
+	return ok && ident.Name == "schema"
+}
+
+// Проверяет, есть ли Description в schema.Schema
+func checkDescriptionField(pass *analysis.Pass, cl *ast.CompositeLit) {
+	hasDescription := false
+	for _, elt := range cl.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		if keyIdent, ok := kv.Key.(*ast.Ident); ok && (keyIdent.Name == "Description" || keyIdent.Name == "MarkdownDescription") {
+			hasDescription = true
+			break
+		}
+	}
+	if !hasDescription {
+		pass.Reportf(cl.Pos(), "schema.Schema should have Description or MarkdownDescription")
+	}
+}
+
+// Проверяет, что в Attributes у каждого поля есть Description
+func checkAttributesMap(pass *analysis.Pass, cl *ast.CompositeLit) {
+	for _, elt := range cl.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		keyIdent, ok := kv.Key.(*ast.Ident)
+		if !ok || keyIdent.Name != "Attributes" {
+			continue
+		}
+
+		// Значение должно быть map[string]schema.Attribute
+		attrMapLit, ok := kv.Value.(*ast.CompositeLit)
+		if !ok {
+			continue
+		}
+
+		for _, attr := range attrMapLit.Elts {
+			attrKV, ok := attr.(*ast.KeyValueExpr)
+			if !ok {
+				continue
+			}
+			attrName, ok := attrKV.Key.(*ast.BasicLit) // "id", "name", ...
+			if !ok || attrName.Kind != token.STRING {
+				continue
+			}
+
+			// Значение — CompositeLit любого schema.*Attribute
+			attrVal, ok := attrKV.Value.(*ast.CompositeLit)
+			if !ok {
+				continue
+			}
+
+			if !hasDescriptionField(attrVal) {
+				pass.Reportf(attrKV.Pos(), "attribute %s is missing Description or MarkdownDescription", attrName.Value)
+			}
+		}
+	}
+}
+
+func hasDescriptionField(cl *ast.CompositeLit) bool {
+	for _, elt := range cl.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		k, ok := kv.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		if k.Name == "Description" || k.Name == "MarkdownDescription" {
+			return true
+		}
+	}
+	return false
 }
