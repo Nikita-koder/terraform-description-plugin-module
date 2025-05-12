@@ -20,7 +20,7 @@ func TestTerraformDescription(t *testing.T) {
 	analyzers, err := plugin.BuildAnalyzers()
 	require.NoError(t, err)
 
-	analysistest.Run(t, testdataDir(t), analyzers[0], "testlintdata/terraformdescription")
+	analysistest.Run(t, testdataDir(t), analyzers[0], "terraformdescription")
 }
 
 func testdataDir(t *testing.T) string {
