@@ -24,7 +24,7 @@ type Element struct {
 	Name string `json:"name"`
 }
 
-type PluginExample struct {
+type PluginTerraformDescription struct {
 	settings MySettings
 }
 
@@ -37,10 +37,10 @@ func New(settings any) (register.LinterPlugin, error) {
 		return nil, err
 	}
 
-	return &PluginExample{settings: s}, nil
+	return &PluginTerraformDescription{settings: s}, nil
 }
 
-func (f *PluginExample) BuildAnalyzers() ([]*analysis.Analyzer, error) {
+func (f *PluginTerraformDescription) BuildAnalyzers() ([]*analysis.Analyzer, error) {
 	return []*analysis.Analyzer{
 		{
 			Name: "terraformdescription",
@@ -50,11 +50,13 @@ func (f *PluginExample) BuildAnalyzers() ([]*analysis.Analyzer, error) {
 	}, nil
 }
 
-func (f *PluginExample) GetLoadMode() string {
-	return register.LoadModeSyntax
+func (f *PluginTerraformDescription) GetLoadMode() string {
+	// Эта константа говорит golangci-lint, что анализатор *может* потребовать
+	// информацию о типах, и golangci-lint загрузит её, если другие анализаторы
+	// её также не запросят в более простом режиме. Обычно лучше быть явным (Вариант 1).
+	return register.LoadModeTypesInfo
 }
-
-func (f *PluginExample) run(pass *analysis.Pass) (interface{}, error) {
+func (f *PluginTerraformDescription) run(pass *analysis.Pass) (interface{}, error) {
 	fmt.Println("Custom linter is running!")
 	for _, file := range pass.Files {
 		fmt.Printf("File %s analysis now \n", file.Name.Name)
