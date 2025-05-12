@@ -115,7 +115,12 @@ func checkAttributesMap(pass *analysis.Pass, cl *ast.CompositeLit) {
 			continue
 		}
 		keyIdent, ok := kv.Key.(*ast.Ident)
-		if !ok || keyIdent.Name != "Attributes" {
+		if !ok {
+			continue
+		}
+
+		if keyIdent.Name != "Attributes" {
+			fmt.Printf("%s != Attributes", keyIdent.Name)
 			continue
 		}
 
@@ -146,6 +151,7 @@ func checkAttributesMap(pass *analysis.Pass, cl *ast.CompositeLit) {
 }
 
 func checkAttributeLiteral(pass *analysis.Pass, name string, cl *ast.CompositeLit) {
+	fmt.Println("Start checkAttributeLiteral")
 	if !hasDescriptionField(cl) {
 		pass.Reportf(cl.Pos(), "attribute %s is missing Description or MarkdownDescription", name)
 	}
@@ -226,6 +232,7 @@ func hasDescriptionField(cl *ast.CompositeLit) bool {
 		if !ok {
 			continue
 		}
+		fmt.Printf("hasDescriptionField(). Name: %s \n", k.Name)
 		if k.Name == "Description" || k.Name == "MarkdownDescription" {
 			return true
 		}
