@@ -3,6 +3,7 @@ package linters
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
 
 	"github.com/golangci/plugin-module-register/register"
 	"golang.org/x/tools/go/analysis"
@@ -61,7 +62,7 @@ func (f *PluginExample) run(pass *analysis.Pass) (interface{}, error) {
 			}
 
 			// Проверяем, что это schema.Schema
-			if isSchemaType(cl.Type, "Schema") {
+			if isSchemaType(pass, cl, "Schema") {
 				checkDescriptionField(pass, cl)
 				checkAttributesMap(pass, cl)
 			}
@@ -72,13 +73,17 @@ func (f *PluginExample) run(pass *analysis.Pass) (interface{}, error) {
 	return nil, nil
 }
 
-func isSchemaType(expr ast.Expr, name string) bool {
-	sel, ok := expr.(*ast.SelectorExpr)
-	if !ok || sel.Sel.Name != name {
+func isSchemaType(pass *analysis.Pass, cl *ast.CompositeLit, expected string) bool {
+	t := pass.TypesInfo.Types[cl]
+	if t.Type == nil {
 		return false
 	}
-	ident, ok := sel.X.(*ast.Ident)
-	return ok && ident.Name == "schema"
+	named, ok := t.Type.(*types.Named)
+	if !ok {
+		return false
+	}
+	obj := named.Obj()
+	return obj.Pkg().Name() == "schema" && obj.Name() == expected
 }
 
 // Проверяет, есть ли Description в schema.Schema
