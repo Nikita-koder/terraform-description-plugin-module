@@ -1,9 +1,10 @@
 package linters
 
 import (
-	"github.com/golangci/plugin-module-register/register"
 	"go/ast"
 	"go/token"
+
+	"github.com/golangci/plugin-module-register/register"
 	"golang.org/x/tools/go/analysis"
 )
 
@@ -98,7 +99,6 @@ func checkDescriptionField(pass *analysis.Pass, cl *ast.CompositeLit) {
 	}
 }
 
-// Проверяет, что в Attributes у каждого поля есть Description
 func checkAttributesMap(pass *analysis.Pass, cl *ast.CompositeLit) {
 	for _, elt := range cl.Elts {
 		kv, ok := elt.(*ast.KeyValueExpr)
@@ -110,30 +110,98 @@ func checkAttributesMap(pass *analysis.Pass, cl *ast.CompositeLit) {
 			continue
 		}
 
-		// Значение должно быть map[string]schema.Attribute
-		attrMapLit, ok := kv.Value.(*ast.CompositeLit)
+		// Значение — map[string]schema.Attribute
+		attrMap, ok := kv.Value.(*ast.CompositeLit)
 		if !ok {
 			continue
 		}
 
-		for _, attr := range attrMapLit.Elts {
+		for _, attr := range attrMap.Elts {
 			attrKV, ok := attr.(*ast.KeyValueExpr)
 			if !ok {
 				continue
 			}
-			attrName, ok := attrKV.Key.(*ast.BasicLit) // "id", "name", ...
+			attrName, ok := attrKV.Key.(*ast.BasicLit)
 			if !ok || attrName.Kind != token.STRING {
 				continue
 			}
 
-			// Значение — CompositeLit любого schema.*Attribute
 			attrVal, ok := attrKV.Value.(*ast.CompositeLit)
 			if !ok {
 				continue
 			}
 
-			if !hasDescriptionField(attrVal) {
-				pass.Reportf(attrKV.Pos(), "attribute %s is missing Description or MarkdownDescription", attrName.Value)
+			checkAttributeLiteral(pass, attrName.Value, attrVal)
+		}
+	}
+}
+
+func checkAttributeLiteral(pass *analysis.Pass, name string, cl *ast.CompositeLit) {
+	if !hasDescriptionField(cl) {
+		pass.Reportf(cl.Pos(), "attribute %s is missing Description or MarkdownDescription", name)
+	}
+
+	for _, elt := range cl.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := kv.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+
+		switch key.Name {
+		case "Attributes":
+			inner, ok := kv.Value.(*ast.CompositeLit)
+			if ok {
+				for _, attr := range inner.Elts {
+					innerKV, ok := attr.(*ast.KeyValueExpr)
+					if !ok {
+						continue
+					}
+					innerName, ok := innerKV.Key.(*ast.BasicLit)
+					if !ok {
+						continue
+					}
+					innerVal, ok := innerKV.Value.(*ast.CompositeLit)
+					if !ok {
+						continue
+					}
+					checkAttributeLiteral(pass, innerName.Value, innerVal)
+				}
+			}
+		case "NestedObject":
+			// for schema.ListNestedAttribute
+			nestedObj, ok := kv.Value.(*ast.CompositeLit)
+			if !ok {
+				continue
+			}
+			for _, nestedElt := range nestedObj.Elts {
+				nkv, ok := nestedElt.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				if nkey, ok := nkv.Key.(*ast.Ident); ok && nkey.Name == "Attributes" {
+					inner, ok := nkv.Value.(*ast.CompositeLit)
+					if ok {
+						for _, attr := range inner.Elts {
+							innerKV, ok := attr.(*ast.KeyValueExpr)
+							if !ok {
+								continue
+							}
+							innerName, ok := innerKV.Key.(*ast.BasicLit)
+							if !ok {
+								continue
+							}
+							innerVal, ok := innerKV.Value.(*ast.CompositeLit)
+							if !ok {
+								continue
+							}
+							checkAttributeLiteral(pass, innerName.Value, innerVal)
+						}
+					}
+				}
 			}
 		}
 	}
