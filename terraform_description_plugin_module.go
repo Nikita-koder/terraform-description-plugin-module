@@ -1,6 +1,7 @@
 package linters
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -54,7 +55,9 @@ func (f *PluginExample) GetLoadMode() string {
 }
 
 func (f *PluginExample) run(pass *analysis.Pass) (interface{}, error) {
+	fmt.Println("Custom linter is running!")
 	for _, file := range pass.Files {
+		fmt.Printf("File %s analysis now \n", file.Name.Name)
 		ast.Inspect(file, func(n ast.Node) bool {
 			cl, ok := n.(*ast.CompositeLit)
 			if !ok {
@@ -105,6 +108,7 @@ func checkDescriptionField(pass *analysis.Pass, cl *ast.CompositeLit) {
 }
 
 func checkAttributesMap(pass *analysis.Pass, cl *ast.CompositeLit) {
+	fmt.Println("Start checkAttributesMap")
 	for _, elt := range cl.Elts {
 		kv, ok := elt.(*ast.KeyValueExpr)
 		if !ok {
